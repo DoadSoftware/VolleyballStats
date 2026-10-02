@@ -1,7 +1,10 @@
 package com.volleyball.controller;
 
-import com.volleyball.dvstat.service.DvStatService;
-import com.volleyball.dvstat.service.VolleyballStats;
+import com.volleyball.dvstat.model.MatchSetup;
+import com.volleyball.dvstat.model.MatchStatistics;
+import com.volleyball.dvstat.service.DvMatchParser;
+import com.volleyball.dvstat.service.MatchJsonService;
+import com.volleyball.dvstat.service.MatchSetupJsonService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -9,6 +12,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.IOException;
@@ -17,18 +21,74 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Properties;
 
 @Controller
 public class VolleyballController {
 
     @Autowired
-    private DvStatService dvStatService;
+    private MatchSetupJsonService matchSetupJsonService;
 
+    @Autowired
+    private DvMatchParser dvMatchParser;
+
+    @Autowired
+    private MatchJsonService matchJsonService;
+    
     private static final Path DLL_DIRECTORY = Path.of(System.getProperty("user.home"), ".volleyballstats");
     private static final Path DLL_FILE = DLL_DIRECTORY.resolve("DvStat.dll");
     private static final Path CONFIG_FILE = DLL_DIRECTORY.resolve("config.properties");
-
+    private static final Path SETUP_DIRECTORY = Path.of("C:\\Sports\\Volleyball\\Setup");
+    private static final Path MATCH_DIRECTORY = Path.of("C:\\Sports\\Volleyball\\Matches");
+    
+	@GetMapping("/match-status")
+	@ResponseBody
+	public long matchStatus(HttpSession session) {
+	    try {
+	        String statisticsFolder = (String) session.getAttribute("statisticsFolder");
+	
+	        if (statisticsFolder == null || statisticsFolder.trim().isEmpty()) {
+	            Properties properties = loadConfig();
+	            statisticsFolder = properties.getProperty("statisticsFolder", "");
+	        }
+	
+	        if (statisticsFolder == null || statisticsFolder.trim().isEmpty()) {
+	            return 0L;
+	        }
+	
+	        File statisticsDirectory = new File(statisticsFolder);
+	
+	        File[] dvwFiles = statisticsDirectory.listFiles((dir, name) -> name.toLowerCase().endsWith(".dvw"));
+	
+	        if (dvwFiles == null || dvwFiles.length == 0) {
+	            return 0L;
+	        }
+	
+	        File latestMatch = Arrays.stream(dvwFiles)
+	                .max(Comparator.comparingLong(File::lastModified))
+	                .orElse(null);
+	
+	        if (latestMatch == null) {
+	            return 0L;
+	        }
+	
+	        var matchInfo = dvMatchParser.parse(latestMatch.toPath());
+	
+	        String matchFileName = matchJsonService.buildFileName(matchInfo) + ".json";
+	        Path matchJsonFile = MATCH_DIRECTORY.resolve(matchFileName);
+	
+	        if (!Files.exists(matchJsonFile)) {
+	            return 0L;
+	        }
+	
+	        return Files.getLastModifiedTime(matchJsonFile).toMillis();
+	
+	    } catch (Exception e) {
+	        return 0L;
+	    }
+	}    
     @GetMapping("/")
     public String initialise(Model model) {
         Properties properties = loadConfig();
@@ -60,9 +120,7 @@ public class VolleyballController {
                 }
 
                 Files.createDirectories(DLL_DIRECTORY);
-
                 Files.copy(dllFile.getInputStream(), DLL_FILE, StandardCopyOption.REPLACE_EXISTING);
-
                 dllPath = DLL_FILE.toAbsolutePath().toString();
             } else {
                 Properties properties = loadConfig();
@@ -113,22 +171,63 @@ public class VolleyballController {
             return "redirect:/";
         }
 
-        int team = 0;
-        int player = 100;
-        int skill = 0;
-        int setNumber = 0;
+        try {
+            File statisticsDirectory = new File(statisticsFolder);
 
-        VolleyballStats stats = dvStatService.readStatistics(dllPath, statisticsFolder, team, player, skill, setNumber);
+            File[] dvwFiles = statisticsDirectory.listFiles((dir, name) -> name.toLowerCase().endsWith(".dvw"));
 
-        model.addAttribute("stats", stats);
-        model.addAttribute("dllPath", dllPath);
-        model.addAttribute("statisticsFolder", statisticsFolder);
-        model.addAttribute("team", team);
-        model.addAttribute("player", player);
-        model.addAttribute("skill", skill);
-        model.addAttribute("setNumber", setNumber);
+            if (dvwFiles == null || dvwFiles.length == 0) {
+                model.addAttribute("error", "No .dvw match files were found in: " + statisticsFolder);
+                return "index";
+            }
 
-        return "index";
+            File latestMatch = Arrays.stream(dvwFiles)
+                    .max(Comparator.comparingLong(File::lastModified))
+                    .orElse(null);
+
+            if (latestMatch == null) {
+                model.addAttribute("error", "No match file could be selected.");
+                return "index";
+            }
+
+            var parsedMatchInfo = dvMatchParser.parse(latestMatch.toPath());
+            String setupFileName = matchSetupJsonService.buildFileName(parsedMatchInfo) + ".json";
+            Path setupFile = SETUP_DIRECTORY.resolve(setupFileName);
+
+            if (!Files.exists(setupFile)) {
+                matchSetupJsonService.writeSetupJson(parsedMatchInfo, latestMatch.toPath(), SETUP_DIRECTORY);
+            }
+
+            MatchSetup matchSetup = matchSetupJsonService.readSetupJson(setupFile);
+
+            String matchFileName = matchJsonService.buildFileName(matchSetup.getMatchInfo()) + ".json";
+            Path matchJsonFile = MATCH_DIRECTORY.resolve(matchFileName);
+
+            if (!Files.exists(matchJsonFile)) {
+                model.addAttribute("error", "Match JSON file was not found: " + matchJsonFile);
+                model.addAttribute("dllPath", dllPath);
+                model.addAttribute("statisticsFolder", statisticsFolder);
+                return "index";
+            }
+
+            MatchStatistics matchStatistics = matchJsonService.readMatchJson(matchJsonFile);
+
+            model.addAttribute("matchSetup", matchSetup);
+            model.addAttribute("matchStatistics", matchStatistics);
+            
+            model.addAttribute("dllPath", dllPath);
+            model.addAttribute("statisticsFolder", statisticsFolder);
+            model.addAttribute("matchFile", latestMatch.getAbsolutePath());
+            model.addAttribute("setupFile", setupFile.toAbsolutePath().toString());
+
+            return "index";
+
+        } catch (Exception e) {
+            model.addAttribute("error", e.getClass().getSimpleName() + ": " + e.getMessage());
+            model.addAttribute("dllPath", dllPath);
+            model.addAttribute("statisticsFolder", statisticsFolder);
+            return "index";
+        }
     }
 
     private Properties loadConfig() {

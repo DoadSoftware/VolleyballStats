@@ -9,13 +9,12 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.view.InternalResourceViewResolver;
 import org.springframework.web.servlet.view.JstlView;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
-@EnableWebMvc
 @Configuration
-@ComponentScan({
-    "com.volleyball.controller",
-    "com.volleyball.dvstat"
-})
+@EnableWebMvc
+@EnableScheduling
+@ComponentScan("com.volleyball")
 @Import({DataSourceConfig.class})
 public class WebMvcConfig implements WebMvcConfigurer {
 

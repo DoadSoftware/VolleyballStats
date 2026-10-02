@@ -1,7 +1,12 @@
 package com.volleyball.dvstat.service;
 
-import com.volleyball.dvstat.model.*;
 import com.sun.jna.Memory;
+import com.volleyball.dvstat.model.TDVOutAtt;
+import com.volleyball.dvstat.model.TDVOutPtsErr;
+import com.volleyball.dvstat.model.TDVOutRec;
+import com.volleyball.dvstat.model.TDVOutSymbol;
+import com.volleyball.dvstat.model.TDVOutSymbolEx;
+import com.volleyball.dvstat.model.TDVParams;
 import org.springframework.stereotype.Service;
 import java.io.File;
 
@@ -9,23 +14,34 @@ import java.io.File;
 public class DvStatService {
 
     public VolleyballStats readStatistics(String dllPath, String statisticsFolder, int team, int player, int skill, int setNumber) {
-        VolleyballStats stats = new VolleyballStats();
-
         try {
             File dll = new File(dllPath);
             File folder = new File(statisticsFolder);
 
             if (!dll.isFile()) {
-                throw new IllegalArgumentException("DVStat.dll was not found: " + dllPath);
+                return createError("DVStat.dll was not found: " + dllPath);
             }
 
             if (!folder.isDirectory()) {
-                throw new IllegalArgumentException("Statistics folder was not found: " + statisticsFolder);
+                return createError("Statistics folder was not found: " + statisticsFolder);
             }
 
-            DvStatLibrary lib = DvStatLibrary.load(dll.getAbsolutePath());
+            DvStatLibrary library = DvStatLibrary.load(dll.getAbsolutePath());
 
-            Memory pathMemory = new Memory((statisticsFolder.length() + 1L) * 2L);
+            return readStatistics(library, statisticsFolder, team, player, skill, setNumber);
+
+        } catch (Throwable e) {
+            return createError(e);
+        }
+    }
+
+    public VolleyballStats readStatistics(DvStatLibrary library, String statisticsFolder, int team, int player, int skill, int setNumber) {
+        VolleyballStats stats = new VolleyballStats();
+
+        Memory pathMemory = null;
+
+        try {
+            pathMemory = new Memory((statisticsFolder.length() + 1L) * 2L);
             pathMemory.setWideString(0, statisticsFolder);
 
             TDVParams params = new TDVParams();
@@ -38,11 +54,11 @@ public class DvStatService {
             params.write();
 
             TDVOutPtsErr points = new TDVOutPtsErr();
-            int rc = lib.GetPointsErr(params, points);
+            int rc = library.GetPointsErr(params, points);
             points.read();
 
             if (rc != 0) {
-                throw new IllegalStateException("GetPointsErr returned " + rc);
+                return createError("GetPointsErr returned " + rc);
             }
 
             stats.setPoints(points.Pts);
@@ -50,7 +66,7 @@ public class DvStatService {
             stats.setTotalEvents(points.Tot);
 
             TDVOutRec reception = new TDVOutRec();
-            rc = lib.GetReceptionPos(params, reception);
+            rc = library.GetReceptionPos(params, reception);
             reception.read();
 
             if (rc == 0) {
@@ -59,7 +75,7 @@ public class DvStatService {
             }
 
             TDVOutAtt attack = new TDVOutAtt();
-            rc = lib.GetAttackPerc(params, attack);
+            rc = library.GetAttackPerc(params, attack);
             attack.read();
 
             if (rc == 0) {
@@ -68,7 +84,7 @@ public class DvStatService {
             }
 
             TDVOutSymbol symbols = new TDVOutSymbol();
-            rc = lib.GetSymbol(params, symbols);
+            rc = library.GetSymbol(params, symbols);
             symbols.read();
 
             if (rc == 0) {
@@ -82,7 +98,7 @@ public class DvStatService {
             }
 
             TDVOutSymbolEx symbolsEx = new TDVOutSymbolEx();
-            rc = lib.GetSymbolEx(params, symbolsEx);
+            rc = library.GetSymbolEx(params, symbolsEx);
             symbolsEx.read();
 
             if (rc == 0) {
@@ -103,8 +119,22 @@ public class DvStatService {
 
         } catch (Throwable e) {
             stats.setErrorMessage(e.getClass().getSimpleName() + ": " + e.getMessage());
+        } finally {
+            if (pathMemory != null) {
+                pathMemory.clear();
+            }
         }
 
         return stats;
+    }
+
+    private VolleyballStats createError(String message) {
+        VolleyballStats stats = new VolleyballStats();
+        stats.setErrorMessage(message);
+        return stats;
+    }
+
+    private VolleyballStats createError(Throwable e) {
+        return createError(e.getClass().getSimpleName() + ": " + e.getMessage());
     }
 }
