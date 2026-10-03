@@ -46,23 +46,20 @@ public class DvStatBatchService {
 
     private TeamStatistics buildTeamStatistics(MatchInfo matchInfo, DvStatLibrary library, String statisticsFolder, int team, String side, int setCount) {
         TeamStatistics teamStatistics = new TeamStatistics();
-        addTeamMatchStatistics(teamStatistics, library, statisticsFolder, team, side, matchInfo.getHomeTeamName(), team == 0);
-        addTeamSetStatistics(teamStatistics, library, statisticsFolder, team, side, matchInfo.getHomeTeamName(), team == 0, setCount);
+        String teamName = team == 0 ? matchInfo.getHomeTeamName() : matchInfo.getAwayTeamName();
+        addTeamMatchStatistics(teamStatistics, library, statisticsFolder, team, side, teamName);
+        addTeamSetStatistics(teamStatistics, library, statisticsFolder, team, side, teamName, setCount);
         addPlayerStatistics(teamStatistics, library, statisticsFolder, matchInfo.getPlayers(), team, side, setCount);
         return teamStatistics;
     }
 
-    private void addTeamMatchStatistics(TeamStatistics teamStatistics, DvStatLibrary library, String statisticsFolder, int team, String side, String homeTeamName, boolean home) {
-        String teamName = home ? homeTeamName : "TEAM";
-
+    private void addTeamMatchStatistics(TeamStatistics teamStatistics, DvStatLibrary library, String statisticsFolder, int team, String side, String teamName) {
         for (int skill = ALL_SKILLS; skill <= LAST_SKILL; skill++) {
             addStatistics(teamStatistics.getMatchStatistics(), library, statisticsFolder, team, side, TEAM_TOTAL_PLAYER, teamName, MATCH_SET, "MATCH", skill, getSkillName(skill));
         }
     }
 
-    private void addTeamSetStatistics(TeamStatistics teamStatistics, DvStatLibrary library, String statisticsFolder, int team, String side, String homeTeamName, boolean home, int setCount) {
-        String teamName = home ? homeTeamName : "TEAM";
-
+    private void addTeamSetStatistics(TeamStatistics teamStatistics, DvStatLibrary library, String statisticsFolder, int team, String side, String teamName, int setCount) {
         for (int setNumber = FIRST_SET; setNumber <= setCount; setNumber++) {
             for (int skill = ALL_SKILLS; skill <= LAST_SKILL; skill++) {
                 addStatistics(teamStatistics.getSetStatistics(), library, statisticsFolder, team, side, TEAM_TOTAL_PLAYER, teamName, setNumber, "SET", skill, getSkillName(skill));
@@ -72,9 +69,7 @@ public class DvStatBatchService {
 
     private void addPlayerStatistics(TeamStatistics teamStatistics, DvStatLibrary library, String statisticsFolder, List<PlayerInfo> players, int team, String side, int setCount) {
         for (PlayerInfo player : players) {
-            if (player.getTeam() != team) {
-                continue;
-            }
+            if (!side.equals(player.getTeam())) continue;
 
             PlayerStatistics playerStatistics = new PlayerStatistics();
             playerStatistics.setPlayerId(player.getPlayerId());
@@ -94,16 +89,17 @@ public class DvStatBatchService {
     }
 
     private void addPlayerSetStatistics(PlayerStatistics playerStatistics, DvStatLibrary library, String statisticsFolder, int team, String side, PlayerInfo player, int setCount) {
-        for (int setNumber = FIRST_SET; setNumber <= setCount; setNumber++) {
+    	for (int setNumber = FIRST_SET; setNumber <= setCount; setNumber++) {
             for (int skill = ALL_SKILLS; skill <= LAST_SKILL; skill++) {
                 addStatistics(playerStatistics.getSetStatistics(), library, statisticsFolder, team, side, player.getJerseyNumber(), player.getFullName(), setNumber, "SET", skill, getSkillName(skill));
             }
         }
     }
 
-    private void addStatistics(List<StatisticEntry> statistics, DvStatLibrary library, String statisticsFolder, int team, String side, int player, String playerName, int setNumber, String scope, int skill, String skillName) {
+    private void addStatistics(List<StatisticEntry> statistics, DvStatLibrary library, String statisticsFolder, 
+    	int team, String side, int player, String playerName, int setNumber, String scope, int skill, String skillName) 
+    {
         VolleyballStats values = dvStatService.readStatistics(library, statisticsFolder, team, player, skill, setNumber);
-
         StatisticEntry entry = new StatisticEntry();
         entry.setTeam(team);
         entry.setSide(side);
@@ -114,7 +110,6 @@ public class DvStatBatchService {
         entry.setSetNumber(setNumber);
         entry.setScope(scope);
         entry.setStatistics(values);
-
         statistics.add(entry);
     }
 

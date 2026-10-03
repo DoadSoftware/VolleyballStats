@@ -3,6 +3,7 @@ package com.volleyball.controller;
 import com.volleyball.dvstat.model.MatchSetup;
 import com.volleyball.dvstat.model.MatchStatistics;
 import com.volleyball.dvstat.service.DvMatchParser;
+import com.volleyball.dvstat.service.MasterDataExportService;
 import com.volleyball.dvstat.service.MatchJsonService;
 import com.volleyball.dvstat.service.MatchSetupJsonService;
 import jakarta.servlet.http.HttpSession;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,6 +31,9 @@ import java.util.Properties;
 @Controller
 public class VolleyballController {
 
+	@Autowired
+	private MasterDataExportService masterDataExportService;
+	
     @Autowired
     private MatchSetupJsonService matchSetupJsonService;
 
@@ -42,6 +48,26 @@ public class VolleyballController {
     private static final Path CONFIG_FILE = DLL_DIRECTORY.resolve("config.properties");
     private static final Path SETUP_DIRECTORY = Path.of("C:\\Sports\\Volleyball\\Setup");
     private static final Path MATCH_DIRECTORY = Path.of("C:\\Sports\\Volleyball\\Matches");
+    
+    @PostMapping("/export-master-data")
+    public String exportMasterData(HttpSession session, RedirectAttributes redirectAttributes) {
+        try {
+            String statisticsFolder = (String) session.getAttribute("statisticsFolder");
+
+            if (statisticsFolder == null || statisticsFolder.trim().isEmpty()) {
+                redirectAttributes.addFlashAttribute("exportError", "Statistics folder is not configured.");
+                return "redirect:/index";
+            }
+
+            MasterDataExportService.ExportResult result = masterDataExportService.export(statisticsFolder);
+
+            redirectAttributes.addFlashAttribute("exportMessage", "Export completed. Matches: " + result.getMatchFiles() + ", Teams: " + result.getTeams() + ", Players: " + result.getPlayers());
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("exportError", "Export failed: " + e.getMessage());
+        }
+
+        return "redirect:/index";
+    }    
     
 	@GetMapping("/match-status")
 	@ResponseBody

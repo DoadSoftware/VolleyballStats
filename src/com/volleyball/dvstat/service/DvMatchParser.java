@@ -48,10 +48,10 @@ public class DvMatchParser {
                     match.getSetScores().add(line);
                     break;
                 case "[3PLAYERS-H]":
-                    parsePlayerLine(line, match, 0);
+                    parsePlayerLine(line, match, "HOME");
                     break;
                 case "[3PLAYERS-V]":
-                    parsePlayerLine(line, match, 1);
+                    parsePlayerLine(line, match, "AWAY");
                     break;
                 default:
                     break;
@@ -90,14 +90,14 @@ public class DvMatchParser {
         if (values.length > 4 && !value(values, 4).isEmpty()) match.setVenue(value(values, 4));
     }
 
-    private void parsePlayerLine(String line, MatchInfo match, int team) {
+    private void parsePlayerLine(String line, MatchInfo match, String team) {
         String[] values = split(line);
 
         if (values.length < 11) return;
 
         PlayerInfo player = new PlayerInfo();
         player.setTeam(team);
-        player.setSide(team == 0 ? "HOME" : "AWAY");
+        player.setSide(team);
         player.setJerseyNumber(parseInt(values, 1));
         player.setCode(value(values, 8));
         player.setLastName(value(values, 9));

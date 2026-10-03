@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class PlayerInfo {
 
-    private int team;
+    private String team;
     private String side;
     private int jerseyNumber;
     private String playerId;
@@ -14,11 +14,11 @@ public class PlayerInfo {
     private String position;
     private boolean starter;
 
-    public int getTeam() {
+    public String getTeam() {
         return team;
     }
 
-    public void setTeam(int team) {
+    public void setTeam(String team) {
         this.team = team;
     }
 

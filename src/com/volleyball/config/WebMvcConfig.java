@@ -18,13 +18,17 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @Import({DataSourceConfig.class})
 public class WebMvcConfig implements WebMvcConfigurer {
 
-    @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/webjars/**")
-                .addResourceLocations("classpath:/META-INF/resources/webjars/");
-        registry.addResourceHandler("/resources/**")
-                .addResourceLocations("/WEB-INF/resources/");
-    }
+	@Override
+	public void addResourceHandlers(ResourceHandlerRegistry registry) {
+	    registry.addResourceHandler("/webjars/**")
+	            .addResourceLocations("classpath:/META-INF/resources/webjars/");
+	    registry.addResourceHandler("/resources/**")
+	            .addResourceLocations("/WEB-INF/resources/");
+	    registry.addResourceHandler("/css/**")
+	            .addResourceLocations("/css/");
+	    registry.addResourceHandler("/js/**")
+	            .addResourceLocations("/js/");
+	}
 
     @org.springframework.context.annotation.Bean
     public InternalResourceViewResolver viewResolver() {
